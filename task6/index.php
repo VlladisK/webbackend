@@ -77,126 +77,132 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
         setcookie('biography_error2', '', 100000);
         $messages['biography2'] = '<p class="msg">Недопустимый формат ввода биографии</p>';
     }
+    $_SESSION['token'] = bin2hex(random_bytes(32));
+    $_SESSION['login'] = $validUser;
     include('dbshow.php');
     exit();
 } else {
-    foreach ($_POST as $key => $value) {
-        if (preg_match('/^clear(\d+)$/', $key, $matches)) {
-            $app_id = $matches[1];
-            setcookie('clear', $app_id, time() + 24 * 60 * 60);
-            $stmt = $db->prepare("DELETE FROM application WHERE application_id = ?");
-            $stmt->execute([$app_id]);
-            $stmt = $db->prepare("DELETE FROM abilities WHERE application_id = ?");
-            $stmt->execute([$app_id]);
-            $stmt = $db->prepare("DELETE FROM users WHERE application_id = ?");
-            $stmt->execute([$app_id]);
-        }
-        if (preg_match('/^save(\d+)$/', $key, $matches)) {
-            $app_id = $matches[1];
-            $dates = array();
-            $dates['name'] = $_POST['name' . $app_id];
-            $dates['email'] = $_POST['email' . $app_id];
-            $dates['year'] = $_POST['year' . $app_id];
-            $dates['gender'] = $_POST['gender' . $app_id];
-            $dates['hand'] = $_POST['hand' . $app_id];
-            $abilities = $_POST['abilities' . $app_id];
-            $filtred_abilities = array_filter($abilities, function($value) {return($value == 1 || $value == 2 || $value == 3);});
-            $dates['biography'] = $_POST['biography' . $app_id];
-        
-            $name = $dates['name'];
-            $email = $dates['email'];
-            $year = $dates['year'];
-            $gender = $dates['gender'];
-            $hand = $dates['hand'];
-            $biography = $dates['biography'];
-        
-            if (empty($name)) {
-                setcookie('name_error', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            }
-            if (empty($email)) {
-                setcookie('email_error1', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } else if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                setcookie('email_error2', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } 
-            if (!is_numeric($year)) {
-                setcookie('year_error1', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } else if ((2023 - $year) < 14) {
-                setcookie('year_error2', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            }
-            if (empty($gender)) {
-                setcookie('gender_error1', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } else if ($gender != 'male' && $gender != 'female') {
-                setcookie('gender_error2', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } 
-            if (empty($hand)) {
-                setcookie('hand_error1', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } else if ($hand != 'right' && $hand != 'left') {
-                setcookie('hand_error2', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            }
-            if (empty($abilities)) {
-                setcookie('abilities_error1', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-              } else if (count($filtred_abilities) != count($abilities)) {
-                setcookie('abilities_error2', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-              }
-            if (empty($biography)) {
-                setcookie('biography_error1', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } else if (!preg_match('/^[\p{Cyrillic}\d\s,.!?-]+$/u', $biography)) {
-                setcookie('biography_error2', '1', time() + 24 * 60 * 60);
-                $errors = TRUE;
-            } 
-        
-            if ($errors) {
-                setcookie('error_id', $app_id, time() + 24 * 60 * 60);
-                header('Location: index.php');
-                exit();
-            } else {
-                setcookie('name_error', '', 100000);
-                setcookie('email_error1', '', 100000);
-                setcookie('email_error2', '', 100000);
-                setcookie('year_error1', '', 100000);
-                setcookie('year_error2', '', 100000);
-                setcookie('gender_error1', '', 100000);
-                setcookie('gender_error2', '', 100000);
-                setcookie('hand_error1', '', 100000);
-                setcookie('hand_error2', '', 100000);
-                setcookie('abilities_error1', '', 100000);
-                setcookie('abilities_error2', '', 100000);
-                setcookie('biography_error1', '', 100000);
-                setcookie('biography_error2', '', 100000);
-                setcookie('error_id', '', 100000);
-            }
-            $stmt = $db->prepare("SELECT name, email, year, gender, hand, biography FROM application WHERE application_id = ?");
-            $stmt->execute([$app_id]);
-            $old_dates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            $stmt = $db->prepare("SELECT superpower_id FROM abilities WHERE application_id = ?");
-            $stmt->execute([$app_id]);
-            $old_abilities = $stmt->fetchAll(PDO::FETCH_COLUMN);
-            if (array_diff($dates, $old_dates[0])) {
-                $stmt = $db->prepare("UPDATE application SET name = ?, email = ?, year = ?, gender = ?, hand = ?, biography = ? WHERE application_id = ?");
-                $stmt->execute([$dates['name'], $dates['email'], $dates['year'], $dates['gender'], $dates['hand'], $dates['biography'], $app_id]);
-            }
-            if (array_diff($abilities, $old_abilities) || count($abilities) != count($old_abilities)) {
+    if (!empty($_POST['token']) && hash_equals($_POST['token'], $_SESSION['token'])) {
+        foreach ($_POST as $key => $value) {
+            if (preg_match('/^clear(\d+)$/', $key, $matches)) {
+                $app_id = $matches[1];
+                setcookie('clear', $app_id, time() + 24 * 60 * 60);
+                $stmt = $db->prepare("DELETE FROM application WHERE application_id = ?");
+                $stmt->execute([$app_id]);
                 $stmt = $db->prepare("DELETE FROM abilities WHERE application_id = ?");
                 $stmt->execute([$app_id]);
-                $stmt = $db->prepare("INSERT INTO abilities (application_id, superpower_id) VALUES (?, ?)");
-                foreach ($abilities as $superpower_id) {
-                    $stmt->execute([$app_id, $superpower_id]);
+                $stmt = $db->prepare("DELETE FROM users WHERE application_id = ?");
+                $stmt->execute([$app_id]);
+            }
+            if (preg_match('/^save(\d+)$/', $key, $matches)) {
+                $app_id = $matches[1];
+                $dates = array();
+                $dates['name'] = $_POST['name' . $app_id];
+                $dates['email'] = $_POST['email' . $app_id];
+                $dates['year'] = $_POST['year' . $app_id];
+                $dates['gender'] = $_POST['gender' . $app_id];
+                $dates['hand'] = $_POST['hand' . $app_id];
+                $abilities = $_POST['abilities' . $app_id];
+                $filtred_abilities = array_filter($abilities, function($value) {return($value == 1 || $value == 2 || $value == 3);});
+                $dates['biography'] = $_POST['biography' . $app_id];
+            
+                $name = $dates['name'];
+                $email = $dates['email'];
+                $year = $dates['year'];
+                $gender = $dates['gender'];
+                $hand = $dates['hand'];
+                $biography = $dates['biography'];
+            
+                if (empty($name)) {
+                    setcookie('name_error', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                }
+                if (empty($email)) {
+                    setcookie('email_error1', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } else if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    setcookie('email_error2', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } 
+                if (!is_numeric($year)) {
+                    setcookie('year_error1', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } else if ((2023 - $year) < 14) {
+                    setcookie('year_error2', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                }
+                if (empty($gender)) {
+                    setcookie('gender_error1', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } else if ($gender != 'male' && $gender != 'female') {
+                    setcookie('gender_error2', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } 
+                if (empty($hand)) {
+                    setcookie('hand_error1', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } else if ($hand != 'right' && $hand != 'left') {
+                    setcookie('hand_error2', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                }
+                if (empty($abilities)) {
+                    setcookie('abilities_error1', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } else if (count($filtred_abilities) != count($abilities)) {
+                    setcookie('abilities_error2', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                }
+                if (empty($biography)) {
+                    setcookie('biography_error1', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } else if (!preg_match('/^[\p{Cyrillic}\d\s,.!?-]+$/u', $biography)) {
+                    setcookie('biography_error2', '1', time() + 24 * 60 * 60);
+                    $errors = TRUE;
+                } 
+            
+                if ($errors) {
+                    setcookie('error_id', $app_id, time() + 24 * 60 * 60);
+                    header('Location: index.php');
+                    exit();
+                } else {
+                    setcookie('name_error', '', 100000);
+                    setcookie('email_error1', '', 100000);
+                    setcookie('email_error2', '', 100000);
+                    setcookie('year_error1', '', 100000);
+                    setcookie('year_error2', '', 100000);
+                    setcookie('gender_error1', '', 100000);
+                    setcookie('gender_error2', '', 100000);
+                    setcookie('hand_error1', '', 100000);
+                    setcookie('hand_error2', '', 100000);
+                    setcookie('abilities_error1', '', 100000);
+                    setcookie('abilities_error2', '', 100000);
+                    setcookie('biography_error1', '', 100000);
+                    setcookie('biography_error2', '', 100000);
+                    setcookie('error_id', '', 100000);
+                }
+                $stmt = $db->prepare("SELECT name, email, year, gender, hand, biography FROM application WHERE application_id = ?");
+                $stmt->execute([$app_id]);
+                $old_dates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $stmt = $db->prepare("SELECT superpower_id FROM abilities WHERE application_id = ?");
+                $stmt->execute([$app_id]);
+                $old_abilities = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                if (array_diff($dates, $old_dates[0])) {
+                    $stmt = $db->prepare("UPDATE application SET name = ?, email = ?, year = ?, gender = ?, hand = ?, biography = ? WHERE application_id = ?");
+                    $stmt->execute([$dates['name'], $dates['email'], $dates['year'], $dates['gender'], $dates['hand'], $dates['biography'], $app_id]);
+                }
+                if (array_diff($abilities, $old_abilities) || count($abilities) != count($old_abilities)) {
+                    $stmt = $db->prepare("DELETE FROM abilities WHERE application_id = ?");
+                    $stmt->execute([$app_id]);
+                    $stmt = $db->prepare("INSERT INTO abilities (application_id, superpower_id) VALUES (?, ?)");
+                    foreach ($abilities as $superpower_id) {
+                        $stmt->execute([$app_id, $superpower_id]);
+                    }
                 }
             }
         }
+        header('Location: index.php');
+    } else {
+        die('Ошибка CSRF: недопустимый токен');
     }
-    header('Location: index.php');
 }
